@@ -1,12 +1,18 @@
-Summary: Undefined subroutine &CIL::Command::Edit::msg
+Summary: Status change Undefined subroutine &CIL::Command::Edit::msg
 Status: New
 CreatedBy: Brenda Wallace <shiny@cpan.org>
 AssignedTo: 
 Inserted: 2009-03-06T04:22:06
-Updated: 2009-03-06T04:22:41
+Updated: 2009-03-06T04:25:55
 
 Description ...
+
+Steps to reproduce:
  $ cil edit
+
+Change Status: to "Closed" and save
+
+Errormessage is:
  Undefined subroutine &CIL::Command::Edit::msg called at /usr/share/perl5/CIL/Command/Edit.pm line 57, <$fh> line 12.
- $
+ 
 
