@@ -19,27 +19,15 @@
 #
 ## ----------------------------------------------------------------------------
 
-package CIL::VCS::Git;
+package CIL::Git;
 
 use strict;
 use warnings;
 use Carp;
-
-use base qw(CIL::VCS::Factory);
-
-sub post_add {
-    my ($self, $issue) = @_;
-
-    my $issue_dir = $issue->cil->IssueDir();
-    my @files;
-    push @files, "$issue_dir/i_" . $issue->name . '.cil';
-    push @files, map { "$issue_dir/c_${_}.cil" } @{ $issue->CommentList };
-    push @files, map { "$issue_dir/a_${_}.cil" } @{ $issue->AttachmentList };
-
-    return [ "git add @files" ];
-}
-
+use List::Util qw(reduce);
 use Git;
+
+use base qw(Class::Accessor);
 
 sub git {
     my $self = shift;
@@ -51,7 +39,7 @@ sub glob_rev {
 
     # only support globbing the last element
     my ($dir, $pattern) = $path =~ m{^([^\*]*/)([^/]*)$}
-	    or croak "unsupported pattern '$path'";
+        or croak "unsupported pattern '$path'";
     $pattern =~ s{([\\\.])}{\\$1}g;
     $pattern =~ s{\*}{.*}g;
     my @match;
@@ -59,9 +47,9 @@ sub glob_rev {
     for ( $self->git->command("ls-tree", $rev, $dir) ) {
         chomp;
         my ($blobid, $path) = m{([0-9a-f]{40})\s+(.*)} or die;
-	if ( $path =~ m{^\Q$dir\E$pattern$} ) {
-	    push @match, $path;
-	}
+        if ( $path =~ m{^\Q$dir\E$pattern$} ) {
+            push @match, $path;
+        }
     }
     @match;
 }
@@ -106,6 +94,44 @@ sub switch_to_branch {
 sub create_branch {
     my ($self, $branch_name) = @_;
     $self->git->command('checkout', '-b', $branch_name);
+}
+
+sub add {
+    my ($self, $cil, @entities) = @_;
+
+    my @filenames;
+    foreach my $entity ( @entities ) {
+        my $filename = $entity->filename($cil, $entity->name());
+        push @filenames, $filename;
+    }
+    return $self->git->command('add', @filenames);
+}
+
+sub commit {
+    my ($self, $cil, $message, @entities) = @_;
+
+    my @filenames;
+    foreach my $entity ( @entities ) {
+        my $filename = $entity->filename($cil, $entity->name());
+        push @filenames, $filename;
+    }
+
+    $message = 'cil-' . $entities[0]->name . ": $message";
+    return $self->git->command('commit', '-m', $message, @filenames);
+}
+
+sub commit_multiple {
+    my ($self, $cil, $message, @entities) = @_;
+
+    my @filenames;
+    foreach my $entity ( @entities ) {
+        my $filename = $entity->filename($cil, $entity->name());
+        push @filenames, $filename;
+    }
+
+    my $commit_list_string = reduce { $a . $b } map { "* cil-" . $_->name . "\n" } @entities;
+
+    return $self->git->command('commit', '-m', "$message\n\n$commit_list_string", @filenames);
 }
 
 ## ----------------------------------------------------------------------------

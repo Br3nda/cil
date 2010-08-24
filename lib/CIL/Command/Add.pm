@@ -39,13 +39,25 @@ sub run {
 
     my $issue = CIL::Issue->new('tmpname');
     $issue->Summary( join ' ', @argv );
-    $issue->Status('New');
+    $issue->Status($cil->DefaultNewStatus);
     $issue->CreatedBy( $user );
     $issue->AssignedTo( $user )
-        if $args->{mine};
+        if ( $args->{mine} or $cil->AutoAssignSelf );
     $issue->Description("Description ...");
 
-    CIL::Utils->add_issue_loop($cil, undef, $issue);
+    $issue = CIL::Utils->add_issue_loop($cil, undef, $issue);
+
+    if ( $cil->UseGit ) {
+        # if we want to add or commit this issue
+        if ( $args->{add} or $args->{commit} ) {
+            $cil->git->add( $cil, $issue );
+        }
+
+        # if we want to commit this issue
+        if ( $args->{commit} ) {
+            $cil->git->commit( $cil, 'New Issue', $issue );
+        }
+    }
 }
 
 1;

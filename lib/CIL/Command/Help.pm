@@ -1,6 +1,6 @@
 ## ----------------------------------------------------------------------------
 # cil is a Command line Issue List
-# Copyright (C) 2008 Andrew Chilton
+# Copyright (C) 2010 Andrew Chilton
 #
 # This file is part of 'cil'.
 #
@@ -19,28 +19,53 @@
 #
 ## ----------------------------------------------------------------------------
 
-package CIL::VCS::Factory;
+package CIL::Command::Help;
 
 use strict;
 use warnings;
-use Carp;
 
-use base qw( Class::Factory );
-
-__PACKAGE__->register_factory_type( Null => 'CIL::VCS::Null' );
-__PACKAGE__->register_factory_type( Git => 'CIL::VCS::Git' );
-
-foreach my $method_name ( qw(post_add glob_rev file_exists dir_exists get_fh) ) {
-    my $method = sub {
-        my ($self) = @_;
-        my $class = ref $self || $self;
-        die "Method '$method_name' not overriden in derived class '$class'";
-    };
-
-    no strict 'refs';
-    *{$method_name} = $method;
-}
+use base qw(CIL::Command);
 
 ## ----------------------------------------------------------------------------
+
+sub name { 'help' }
+
+sub run {
+    my ($class) = @_;
+
+   print <<"END_USAGE";
+Usage: $0 COMMAND [options]
+
+Commands:
+   init    [--path=PATH]
+   add
+   summary [FILTERS...]
+   list    [FILTERS...]
+   show    ISSUE
+   status  NEW_STATUS [ISSUES...]
+   label   NEW_LABEL [ISSUES...]
+   steal   ISSUE
+   edit    ISSUE
+   comment ISSUE
+   attach  ISSUE FILENAME
+   extract ATTACHMENT [--filename=FILENAME]
+   am      EMAIL.TXT [--batch]
+   track   ISSUE
+   fsck
+
+Filters:
+   --status=?
+   --is-open
+   --is-closed
+   --label=?
+   --assigned-to=?
+   --is-mine
+
+See <http://www.chilts.org/project/cil/> for further information.
+Report bugs to <andychilton\@gmail.com>.
+END_USAGE
+}
+
 1;
+
 ## ----------------------------------------------------------------------------

@@ -27,13 +27,14 @@ use Carp;
 
 use CIL;
 use CIL::Utils;
+use Date::Simple;
 
 use base qw(CIL::Base);
 
 # fields specific to Issue
-__PACKAGE__->mk_accessors(qw(Summary Status AssignedTo DependsOn Precedes Label Comment Attachment Description));
+__PACKAGE__->mk_accessors(qw(Summary Status AssignedTo DueDate DependsOn Precedes Label Comment Attachment Description));
 
-my @FIELDS = ( qw(Summary Status CreatedBy AssignedTo DependsOn Precedes Label Comment Attachment Inserted Updated Description) );
+my @FIELDS = ( qw(Summary Status CreatedBy AssignedTo DueDate DependsOn Precedes Label Comment Attachment Inserted Updated Description) );
 my $cfg = {
     array => {
         Label      => 1,
@@ -62,6 +63,7 @@ sub new {
         Status      => '',
         CreatedBy   => '',
         AssignedTo  => '',
+        DueDate     => '',
         Inserted    => '',
         Updated     => '',
         Label       => [],
@@ -82,6 +84,10 @@ sub prefix {
     return 'i';
 }
 
+sub type {
+    return 'Issue';
+}
+
 sub fields {
     return \@FIELDS;
 }
@@ -100,7 +106,7 @@ sub is_valid {
     my @errors;
 
     # issues should have a Summary
-    unless ( defined defined $self->Summary and length $self->Summary ) {
+    unless ( defined $self->Summary and length $self->Summary ) {
         push @errors, 'Issue does not have a summary';
     }
 
@@ -121,6 +127,13 @@ sub is_valid {
         }
     }
 
+    # check that the DueDate is valid
+    if ( $self->DueDate ) {
+        unless ( Date::Simple->new($self->DueDate) ) {
+            push @errors, "DueDate is not a valid date";
+        }
+    }
+
     $self->errors( \@errors );
     return @errors ? 0 : 1;
 }
@@ -131,8 +144,22 @@ sub add_label {
     croak 'provide a label when adding one'
         unless defined $label;
 
+    # return if we already have this label
+    return if grep { $_ eq $label } @{$self->{data}{Label}};
+
     push @{$self->{data}{Label}}, $label;
-    $self->flag_as_updated();
+    $self->set_updated_now();
+}
+
+sub remove_label {
+    my ($self, $label) = @_;
+
+    croak 'provide a label when removing one'
+        unless defined $label;
+
+    # remove this label
+    @{$self->{data}{Label}} = grep { $_ ne $label } @{$self->{data}{Label}};
+    $self->set_updated_now();
 }
 
 sub add_comment {
@@ -165,8 +192,11 @@ sub add_depends_on {
     croak 'provide an issue name when adding a depends'
         unless defined $depends;
 
+    # return if we already have this depends
+    return if grep { $_ eq $depends } @{$self->{data}{DependsOn}};
+
     push @{$self->{data}{DependsOn}}, $depends;
-    $self->flag_as_updated();
+    $self->set_updated_now();
 }
 
 sub add_precedes {
@@ -175,8 +205,11 @@ sub add_precedes {
     croak 'provide an issue name when adding a precedes'
         unless defined $precedes;
 
+    # return if we already have this precedes
+    return if grep { $_ eq $precedes } @{$self->{data}{Precedes}};
+
     push @{$self->{data}{Precedes}}, $precedes;
-    $self->flag_as_updated();
+    $self->set_updated_now();
 }
 
 sub LabelList {

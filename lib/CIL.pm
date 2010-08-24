@@ -25,45 +25,46 @@ use strict;
 use warnings;
 use Carp qw(croak confess);
 use File::Glob qw(:glob);
+use File::HomeDir;
+use CIL::Git;
 
 use vars qw( $VERSION );
-$VERSION = '0.5.1';
+$VERSION = '0.07.00';
 
-use Module::Pluggable 
+use Module::Pluggable
         sub_name    => 'commands',
         search_path => [ 'CIL::Command' ],
         require     => 1;
-
-use CIL::VCS::Factory;
 
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(
     IssueDir
     StatusStrict StatusAllowed StatusOpen StatusClosed
     LabelStrict LabelAllowed
-    VCS
-    vcs hook
-    vcs_revision
+    DefaultNewStatus
+    UseGit
+    UserName UserEmail
+    AutoAssignSelf
+    git hook
 ));
 
 my $defaults = {
-    IssueDir     => 'issues', # the dir to save the issues in
-    StatusStrict => 0,        # whether to complain if a status is invalid
-    LabelStrict  => 0,        # whether to complain if a label is invalid
-    VCS          => 'Null',   # don't do anything for VCS hooks
+    IssueDir         => 'issues', # the dir to save the issues in
+    StatusStrict     => 0,        # whether to complain if a status is invalid
+    LabelStrict      => 0,        # whether to complain if a label is invalid
+    DefaultNewStatus => 'New',    # What Status to use for new issues by default
+    UseGit           => 0,        # don't do anything with Git
 };
 
-my @config_hashes = qw(StatusAllowed StatusOpen StatusClosed LabelAllowed);
+my @config_hashes = qw(StatusOpen StatusClosed LabelAllowed);
 
 my $defaults_user = {
-    UserName  => 'Name',
-    UserEmail => 'me@example.com',
+    UserName       => eval { Git->repository->config( 'user.name' ) } || 'UserName',
+    UserEmail      => eval { Git->repository->config( 'user.email' ) } || 'username@example.org',
+    AutoAssignSelf => 0,
 };
 
 my $allowed = {
-    vcs => {
-        'Git' => 1,
-    },
     hook => {
         'issue_post_save' => 1,
     },
@@ -82,18 +83,14 @@ sub new {
     # save the settings for various bits of info
     foreach my $key ( keys %$defaults ) {
         # if we have been passed it in, use it, else use the default
-        $self->$key( $cfg->{$key} || $defaults->{$key} ); 
+        $self->$key( $cfg->{$key} || $defaults->{$key} );
     }
     return $self;
 }
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 sub command_names {
     return map { $_->name } $_[0]->commands;
 }
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub list_entities {
     my ($self, $prefix, $base) = @_;
@@ -101,13 +98,7 @@ sub list_entities {
     $base = '' unless defined $base;
 
     my $globpath = $self->IssueDir . "/${prefix}_${base}*.cil";
-    my @filenames;
-    if ( $self->vcs_revision ) {
-        @filenames = $self->vcs->glob_rev($self->vcs_revision, $globpath);
-    }
-    else {
-        @filenames = bsd_glob($globpath);
-    }
+    my @filenames = bsd_glob($globpath);
 
     my @entities;
     foreach my $filename ( sort @filenames ) {
@@ -225,15 +216,23 @@ sub get_attachments_for {
 sub read_config_user {
     my ($self) = @_;
 
-    my $filename = "$ENV{HOME}/.cilrc";
+    my $filename = File::HomeDir->my_home() . '/.cilrc';
 
+    # firstly, set the default config
     my $cfg;
+    %$cfg = %$defaults_user;
+
+    # then read the ~/.cilrc file
     if ( -f $filename ) {
         $cfg = CIL::Utils->parse_cil_file( $filename );
     }
 
-    # set each config to be either the user defined one or the default
-    foreach ( qw() ) { # nothing yet
+    # for some settings, see if we can get it from Git
+    $cfg->{UserName} = eval { Git->repository->config( 'user.name' ) }  || $cfg->{UserName};
+    $cfg->{UserEmail} = eval { Git->repository->config( 'user.email' ) } || $cfg->{UserEmail};
+
+    # save them all internally
+    foreach ( qw(UserName UserEmail AutoAssignSelf) ) {
         $self->$_( $cfg->{$_} || $defaults_user->{$_} );
     }
 }
@@ -248,13 +247,12 @@ sub read_config_file {
     my $cfg;
     if ( -f $filename ) {
         $cfg = CIL::Utils->parse_cil_file( $filename );
+        %$cfg = (%$defaults, %$cfg);
     }
     else {
+        # set some defaults if we don't have a .cil file
         $cfg = $defaults;
     }
-
-    # set some defaults if we don't have any of these
-    %$cfg = (%$defaults, %$cfg);
 
     # for some things, make a hash out of them
     foreach my $hash_name ( @config_hashes ) {
@@ -278,32 +276,28 @@ sub read_config_file {
 
     # set each config item
     $self->IssueDir( $cfg->{IssueDir} );
+    $self->UseGit( $cfg->{UseGit} );
 
+    # Status info
     $self->StatusStrict( $cfg->{StatusStrict} );
-    $self->StatusAllowed( $cfg->{StatusAllowed} );
     $self->StatusOpen( $cfg->{StatusOpen} );
     $self->StatusClosed( $cfg->{StatusClosed} );
 
+    # make the StatusAllowed list the sum of StatusOpen and StatusClosed
+    $self->StatusAllowed( { %{$cfg->{StatusOpen}}, %{$cfg->{StatusClosed}} } );
+
+    # Label Info
     $self->LabelStrict( $cfg->{LabelStrict} );
     $self->LabelAllowed( $cfg->{LabelAllowed} );
 
-    # if we are allowed this VCS, create the hook instance
-    $self->VCS( $cfg->{VCS} || 'Null' );
-    my $vcs = CIL::VCS::Factory->new( $cfg->{VCS} );
-    $self->vcs( $vcs );
-}
+    $self->DefaultNewStatus( $cfg->{DefaultNewStatus} );
 
-sub check_args {
-    my ($self, $args) = @_;
-
-    if ( $args->{r} ) {
-        $self->vcs_revision($args->{r});
-        if ( !$self->VCS or $self->VCS eq "Null" ) {
-            warn "No VCS set in config file!\n";
-        }
+    # create the git instance if we want it
+    $self->UseGit( $cfg->{UseGit} || 0 );
+    if ( $self->UseGit ) {
+        $self->git( CIL::Git->new() );
     }
 }
-
 
 sub register_hook {
     my ($self, $hook_name, $code) = @_;
@@ -332,57 +326,22 @@ sub run_hook {
 
 sub file_exists {
     my ($self, $filename) = @_;
-    if ( $self->vcs_revision ) {
-        $self->vcs->file_exists($self->vcs_revision, $filename);
-    }
-    else {
-        -f $filename;
-    }
+    return -f $filename;
 }
 
 sub dir_exists {
     my ($self, $dir) = @_;
-
-    return $self->vcs_revision 
-            ? $self->vcs->dir_exists($self->vcs_revision, $dir)
-            : -d $dir
-            ;
+    return -d $dir;
 }
 
 sub parse_cil_file {
     my ($self, $filename, $last_field) = @_;
-
-    if ( $self->vcs_revision ) {
-	my $fh = $self->vcs->get_fh($self->vcs_revision, $filename);
-	CIL::Utils->parse_from_fh($fh, $last_field);
-    }
-    else {
-	CIL::Utils->parse_cil_file($filename, $last_field);
-    }
+    return CIL::Utils->parse_cil_file($filename, $last_field);
 }
 
 sub save {
-    my ($self, $filename, $data, @fields) = @_;	
-
-    if ( $self->vcs_revision ) {
-        confess "tried to ->save on alternate revision";
-    }
-    else {
-	CIL::Utils->write_cil_file( $filename, $data, @fields );
-    }
-}
-
-## ----------------------------------------------------------------------------
-# simple delegates to elsewhere
-
-sub UserName {
-    my ($self) = @_;
-    return $self->vcs->UserName
-}
-
-sub UserEmail {
-    my ($self) = @_;
-    return $self->vcs->UserEmail
+    my ($self, $filename, $data, @fields) = @_;
+    return CIL::Utils->write_cil_file( $filename, $data, @fields );
 }
 
 ## ----------------------------------------------------------------------------

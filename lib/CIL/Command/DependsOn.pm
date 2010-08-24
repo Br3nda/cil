@@ -41,6 +41,20 @@ sub run {
 
     $issue->save($cil);
     $depends->save($cil);
+
+    if ( $cil->UseGit ) {
+        # if we want to add or commit this change
+        if ( $args->{add} or $args->{commit} ) {
+            $cil->git->add( $cil, $issue );
+            $cil->git->add( $cil, $depends );
+        }
+
+        # if we want to commit this change
+        if ( $args->{commit} ) {
+            my $message = 'Issue ' . $issue->name . ' has a new dependent ' . $depends->name;
+            $cil->git->commit_multiple( $cil, $message, $issue, $depends );
+        }
+    }
 }
 
 1;

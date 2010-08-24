@@ -31,20 +31,51 @@ use base qw(CIL::Command);
 sub name { 'label' }
 
 sub run {
-    my ($self, $cil, undef, $issue_name, $label) = @_;
+    my ($self, $cil, $args, $label, @issue_names) = @_;
 
     unless ( defined $label ) {
-        $cil->fatal("provide a label to add to this issue");
+        CIL::Utils->fatal("provide a valid label to add to this issue");
     }
 
-    # firstly, read the issue in
-    my $issue = CIL::Utils->load_issue_fuzzy( $cil, $issue_name );
+    my @issues;
 
-    # set the status for this issue
-    $issue->add_label( $label );
-    $issue->save($cil);
+    # for every issue
+    foreach my $issue_name ( @issue_names ) {
+        # firstly, read the issue in
+        my $issue = CIL::Utils->load_issue_fuzzy( $cil, $issue_name );
 
-    CIL::Utils->display_issue($cil, $issue);
+        # decide whether we are adding or removing this label
+        if ( $args->{remove} ) {
+            $issue->remove_label( $label );
+        }
+        else {
+            $issue->add_label( $label );
+        }
+
+        # save
+        $issue->save($cil);
+
+        if ( $cil->UseGit ) {
+            # if we want to add or commit this issue
+            if ( $args->{add} or $args->{commit} ) {
+                $cil->git->add( $cil, $issue );
+            }
+        }
+
+        push @issues, $issue;
+    }
+
+    if ( $cil->UseGit ) {
+        # if we want to commit these issues
+        if ( $args->{commit} ) {
+            if ( $args->{remove} ) {
+                $cil->git->commit_multiple( $cil, "Removed label '$label'", @issues );
+            }
+            else {
+                $cil->git->commit_multiple( $cil, "Added label '$label'", @issues );
+            }
+        }
+    }
 }
 
 1;

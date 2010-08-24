@@ -59,11 +59,10 @@ sub run {
     }
 
     # are we in a Git repository?
-    my $VCSconfig = '';
+    my $use_git = 0;
     if ( -d '.git' ) {
-        CIL::Utils->msg( 'git repository detected, setting VCS accordingly' );
-        $VCSconfig = 'VCS: Git';
-        my $vcs = CIL::VCS::Factory->new( 'Git' );
+        CIL::Utils->msg( 'git repository detected, setting to use it' );
+        $use_git = 1;
     }
 
     # create a .cil file here also
@@ -76,14 +75,12 @@ sub run {
     else {
         # write a default .cil file
         write_file($config, <<"CONFIG");
-$VCSconfig
+UseGit: $use_git
 StatusStrict: 1
-StatusAllowedList: New
-StatusAllowedList: InProgress
-StatusAllowedList: Finished
 StatusOpenList: New
 StatusOpenList: InProgress
 StatusClosedList: Finished
+DefaultNewStatus: New
 LabelStrict: 1
 LabelAllowedList: Type-Enhancement
 LabelAllowedList: Type-Defect
@@ -98,7 +95,7 @@ CONFIG
         write_file("$issues_dir/README.txt", <<'README');
 This directory is used by CIL to track issues and feature requests.
 
-The home page for CIL is at http://kapiti.geek.nz/software/cil.html
+The home page for CIL is at http://www.chilts.org/project/cil/
 README
     }
 

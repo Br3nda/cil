@@ -35,7 +35,7 @@ my $y = 'y';
 sub name { 'edit' }
 
 sub run {
-    my ($self, $cil, undef, $issue_name) = @_;
+    my ($self, $cil, $args, $issue_name) = @_;
 
     my $issue = CIL::Utils->load_issue_fuzzy( $cil, $issue_name );
 
@@ -54,8 +54,8 @@ sub run {
             $edit = 'n';
         }
         else {
-            msg($_) foreach @{ $issue->errors };
-            $edit = ans('Would you like to re-edit (y/n): ');
+            CIL::Utils->msg($_) foreach @{ $issue->errors };
+            $edit = CIL::Utils::ans('Would you like to re-edit (y/n): ');
         }
     }
 
@@ -64,6 +64,19 @@ sub run {
 
     # save it
     $issue->save($cil);
+
+    if ( $cil->UseGit ) {
+        # if we want to add or commit this issue
+        if ( $args->{add} or $args->{commit} ) {
+            $cil->git->add( $cil, $issue );
+        }
+
+        # if we want to commit this issue
+        if ( $args->{commit} ) {
+            $cil->git->commit( $cil, 'Issue Edited', $issue );
+        }
+    }
+
     CIL::Utils->display_issue($cil, $issue);
 }
 

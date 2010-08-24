@@ -31,7 +31,7 @@ use base qw(CIL::Command);
 sub name { 'comment' }
 
 sub run {
-    my ($self, $cil, undef, $issue_name) = @_;
+    my ($self, $cil, $args, $issue_name) = @_;
 
     my $issue = CIL::Utils->load_issue_fuzzy( $cil, $issue_name );
 
@@ -43,7 +43,20 @@ sub run {
     $comment->CreatedBy( CIL::Utils->user($cil) );
     $comment->Description("Description ...");
 
-    CIL::Utils->add_comment_loop($cil, undef, $issue, $comment);
+    $comment = CIL::Utils->add_comment_loop($cil, undef, $issue, $comment);
+
+    if ( $cil->UseGit ) {
+        # if we want to add or commit this comment
+        if ( $args->{add} or $args->{commit} ) {
+            $cil->git->add( $cil, $issue );
+            $cil->git->add( $cil, $comment );
+        }
+
+        # if we want to commit this comment
+        if ( $args->{commit} ) {
+            $cil->git->commit( $cil, 'New Comment', $issue, $comment );
+        }
+    }
 }
 
 1;

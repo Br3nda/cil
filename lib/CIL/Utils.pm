@@ -78,7 +78,7 @@ sub parse_from_lines {
             $data->{$key} = $value;
         }
     }
-    
+
     # now read everything that's left into the $last_field field (if there is one)
     $data->{$last_field} = join("\n", @lines)
         if defined $last_field;
@@ -343,6 +343,8 @@ sub display_issue {
     $class->field( 'Status', $issue->Status() );
     $class->field( 'CreatedBy', $issue->CreatedBy() );
     $class->field( 'AssignedTo', $issue->AssignedTo() );
+    $class->field( 'DueDate', $issue->DueDate() )
+        if $issue->DueDate();
     $class->field( 'Label', $_ )
         foreach sort @{$issue->LabelList()};
     $class->field( 'Comment', $_ )
@@ -368,6 +370,8 @@ sub display_issue_full {
     $class->field( 'Status', $issue->Status() );
     $class->field( 'CreatedBy', $issue->CreatedBy() );
     $class->field( 'AssignedTo', $issue->AssignedTo() );
+    $class->field( 'DueDate', $issue->DueDate() )
+        if $issue->DueDate();
     $class->field( 'Label', $_ )
         foreach sort @{$issue->Label()};
     $class->field( 'DependsOn', $_ )
@@ -375,7 +379,7 @@ sub display_issue_full {
     $class->field( 'Precedes', $_ )
         foreach sort @{$issue->PrecedesList()};
     $class->field( 'Inserted', $issue->Inserted() );
-    $class->field( 'Updated', $issue->Inserted() );
+    $class->field( 'Updated', $issue->Updated() );
     $class->text('Description', $issue->Description());
 
     my $comments = $cil->get_comments_for( $issue );
@@ -482,9 +486,9 @@ sub display_issue_summary {
     my ($class, $issue) = @_;
 
     my $msg = $issue->name();
-    $msg .= "\t";
+    $msg .= "   ";
     $msg .= $issue->Status();
-    $msg .= "\t";
+    $msg .= (' ' x ( 13 - length $issue->Status() ));
     $msg .= $issue->Summary();
 
     $class->msg($msg);
@@ -497,6 +501,7 @@ sub display_issue_headers {
     $class->field( 'Summary', $issue->Summary() );
     $class->field( 'CreatedBy', $issue->CreatedBy() );
     $class->field( 'AssignedTo', $issue->AssignedTo() );
+    $class->field( 'DueDate', $issue->DueDate() );
     $class->field( 'Inserted', $issue->Inserted() );
     $class->field( 'Status', $issue->Status() );
     $class->field( 'Labels', join(' ', @{$issue->LabelList()}) );

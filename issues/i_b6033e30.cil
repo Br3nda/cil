@@ -1,0 +1,15 @@
+Summary: can't find issues folder
+Status: Cancelled
+CreatedBy: Name <me@example.com>
+AssignedTo: 
+Label: Milestone-v0.06
+Inserted: 2009-06-06T09:39:09
+Updated: 2010-01-21T23:12:50
+
+Description ...
+I created an issue, while in the issues folder.. it doesn't write it
+would be nice if it echoed the issue just entered to allow the user to copypaste it it once they were in the right folder agin.
+
+brenda@Toshi:~/projects/birdcage/issues$ cil add
+write_file 'issues/i_1659e495.cil' - sysopen: No such file or directory at /usr/share/perl5/CIL/Utils.pm line 124
+

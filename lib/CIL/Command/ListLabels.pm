@@ -1,6 +1,6 @@
 ## ----------------------------------------------------------------------------
 # cil is a Command line Issue List
-# Copyright (C) 2008 Andrew Chilton
+# Copyright (C) 2010 Andrew Chilton
 #
 # This file is part of 'cil'.
 #
@@ -19,24 +19,46 @@
 #
 ## ----------------------------------------------------------------------------
 
-package CIL::VCS::Null;
+package CIL::Command::ListLabels;
 
 use strict;
 use warnings;
-use Carp;
 
-use base qw(CIL::VCS::Factory);
-
-foreach my $method_name ( qw(post_add) ) {
-    no strict 'refs';
-    *{"CIL::VCS::Null::$method_name"} = sub {};
-}
-
-foreach my $method_name ( qw(UserName UserEmail) ) {
-    no strict 'refs';
-    *{"CIL::VCS::Null::$method_name"} = sub { return ''; };
-}
+use base qw(CIL::Command);
 
 ## ----------------------------------------------------------------------------
+
+sub name { 'list-labels' }
+
+sub run {
+    my ($self, $cil, $args) = @_;
+
+    CIL::Utils->check_paths($cil);
+
+    # find all the issues
+    my $issues = $cil->get_issues();
+    $issues = CIL::Utils->filter_issues( $cil, $issues, $args );
+    unless ( @$issues ) {
+        CIL::Utils->msg('no issues found');
+        return;
+    }
+
+    # loop through the issues and save all the labels they have
+    use Data::Dumper;
+    my %labels;
+    foreach my $issue ( @$issues ) {
+        # print Dumper($issue->LabelList), "\n";
+        my $labels = $issue->LabelList;
+        foreach my $label ( @$labels ) {
+            $labels{$label}++;
+        }
+    }
+
+    foreach my $label ( sort keys %labels ) {
+        print "$label\n";
+    }
+}
+
 1;
+
 ## ----------------------------------------------------------------------------

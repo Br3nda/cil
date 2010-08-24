@@ -5,15 +5,22 @@ Dependencies
 
 Perl Modules:
 
- * File::Touch
- * File::Glob
- * File::Basename
- * MIME::Base64
+ * Class::Accessor
+ * Date::Simple
+ * DateTime
+ * Digest (Perl core module)
+ * Email::Date
  * Email::Find
+ * File::Basename (Perl core module)
+ * File::Glob (Perl core module)
+ * File::HomeDir
+ * File::Slurp
+ * File::Touch
+ * Getopt::Mixed
+ * Git (from the git distribution)
+ * MIME::Base64 (Perl core module)
 
-Some of these are distributed with perl itself but is left as an excercise to
-the reader to figure out what you need in your distribution (for Debian Etch,
-see below).
+Install these with your system's respective package manager.
 
 ===============================================================================
 
@@ -28,7 +35,9 @@ For Debian Etch, the following packages will need to be installed:
 * libfile-touch-perl
 * libfile-slurp-perl
 * libclass-accessor-perl
+* libdate-simple-perl
 * libdatetime-perl
+* libfile-homedir-perl
 
 Out of the box, cil provides two debian directories depending on which version
 of Debian you wish to use. Currently, there isn't much difference but choose
@@ -52,6 +61,44 @@ Then, you can just run 'cil' from the command line.
 
 ===============================================================================
 
+Windows
+-------
+
+The recommended (and tested) distribution of Perl to use is the one provided by
+the kind folks at ActiveState.  Use at least version 5.10 build 1006.
+
+For Git integration, install msysgit.  It shouldn't really matter how you
+install it, but we'll assume the recommended "Git Bash" method for the purposes
+of these instructions.
+
+Assume that Git is installed at %GitRoot%.  Assume that the cil distribution is
+at %CilRoot%.  Assume that perl.exe is somewhere in your PATH.  Run the
+following at a command prompt:
+
+ C:\>set PATH=%PATH%;%GitRoot%\bin
+ C:\>set PERL5LIB=%PERL5LIB%;%CilRoot%\lib;%GitRoot%\lib\perl5\site_perl
+
+Do not set these environment variables globally by way of xset or similar;
+we're looking to keep git in the path for this prompt and this prompt only.
+
+After you've done this, `cd` to a project that you're managing with git:
+
+ C:\>cd C:\SomeProject
+ C:\SomeProject>
+
+Now, run `cil init`:
+
+ C:\SomeProject>perl %CilRoot%\bin\cil init
+
+If all is well, you should see the following message:
+
+ git repository detected, setting to use it
+ initialised empty issue list inside './'
+
+Enjoy!
+
+===============================================================================
+
 Running 'cil' without installing
 --------------------------------
 
@@ -69,6 +116,6 @@ Then you can either run by:
 
 ===============================================================================
 
-See http://kapiti.geek.nz/software/cil.html for further information.
+See http://www.chilts.org/projects/cil/ for further information.
 
 ===============================================================================

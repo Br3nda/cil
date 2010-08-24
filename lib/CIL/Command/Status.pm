@@ -31,20 +31,40 @@ use base qw(CIL::Command);
 sub name { 'status' }
 
 sub run {
-    my ($self, $cil, undef, $issue_name, $status) = @_;
+    my ($self, $cil, $args, $status, @issue_names) = @_;
 
     unless ( defined $status ) {
-        $cil->fatal("provide a status to set this issue to");
+        CIL::Utils->fatal("provide a valid status to set this issue to");
     }
 
-    # firstly, read the issue in
-    my $issue = CIL::Utils->load_issue_fuzzy( $cil, $issue_name );
+    my @issues;
 
-    # set the status for this issue
-    $issue->Status( $status );
-    $issue->save($cil);
+    # for every issue, read it it and set the Status
+    foreach my $issue_name ( @issue_names ) {
+        # firstly, read the issue in
+        my $issue = CIL::Utils->load_issue_fuzzy( $cil, $issue_name );
 
-    CIL::Utils->display_issue($cil, $issue);
+        # set the label for this issue
+        $issue->Status( $status );
+        $issue->save($cil);
+
+        # if we want to add or commit this issue
+        if ( $cil->UseGit ) {
+            if ( $args->{add} or $args->{commit} ) {
+                $cil->git->add( $cil, $issue );
+            }
+        }
+
+        push @issues, $issue;
+    }
+
+    if ( $cil->UseGit ) {
+        # if we want to commit these issues
+        if ( $args->{commit} ) {
+            my $message = "Status changed to '$status'";
+            $cil->git->commit_multiple( $cil, $message, @issues );
+        }
+    }
 }
 
 1;

@@ -32,6 +32,7 @@ use CIL;
 use CIL::Issue;
 use CIL::Comment;
 use CIL::Attachment;
+use CIL::Utils;
 
 ## ----------------------------------------------------------------------------
 # constants
@@ -59,6 +60,10 @@ my @IN_OPTS = (
     'is-closed',    # for 'summary', 'list'
     'is-mine',      # for 'summary', 'list'
     'mine',         # for 'add'
+    'add',          # for 'add', 'comment'
+    'commit',       # for 'add', 'comment'
+    'batch',        # for 'am'
+    'remove',       # for 'label'
     'help',
     'version',
 );
@@ -71,6 +76,10 @@ my %BOOLEAN_ARGS = (
     'is-closed' => 1,
     'is-mine'   => 1,
     'mine'      => 1,
+    'add'       => 1,
+    'commit'    => 1,
+    'batch'     => 1,
+    'remove'    => 1,
 );
 
 ## ----------------------------------------------------------------------------
@@ -86,7 +95,8 @@ my %BOOLEAN_ARGS = (
     }
 
     if ( exists $args->{help} ) {
-        usage();
+        use CIL::Command::Help;
+        CIL::Command::Help->run();
         exit;
     }
 
@@ -95,15 +105,19 @@ my %BOOLEAN_ARGS = (
        if @ARGV == 0;
 
     my $command_name = shift @ARGV;
-    $command_name =~ s{-}{_}gxms;
-
     my( $command ) =  grep { $command_name eq $_->name } CIL->commands
         or Getopt::Mixed::abortMsg("'$command_name' is not a valid cil command.");
 
+    # make a new $cil object
     my $cil = CIL->new();
+
+    # for all commands (except init), we need to know we can see the proper paths
+    # (ie. issues/)
+    CIL::Utils->check_paths( $cil )
+        unless $command_name eq 'init';
+
     $cil->read_config_user();
     $cil->read_config_file();
-    $cil->check_args($args);
 
     # add any hooks we want
     # none yet
@@ -143,42 +157,6 @@ sub get_options {
     }
     Getopt::Mixed::cleanup();
     return $args;
-}
-
-## ----------------------------------------------------------------------------
-# program info
-
-sub usage {
-   print <<"END_USAGE";
-Usage: $0 COMMAND [options]
-
-Commands:
-   init    [--path=PATH]
-   add
-   summary [FILTERS...]
-   list    [FILTERS...]
-   show    ISSUE
-   status  ISSUE NEW_STATUS
-   steal   ISSUE
-   edit    ISSUE
-   comment ISSUE
-   attach  ISSUE FILENAME
-   extract ATTACHMENT [--filename=FILENAME]
-   am      EMAIL.TXT
-   track   ISSUE
-   fsck
-
-Filters:
-   --status=?
-   --is-open
-   --is-closed
-   --label=?
-   --assigned-to=?
-   --is-mine
-
-See <http://kapiti.geek.nz/software/cil.html> for further information.
-Report bugs to <andychilton\@gmail.com>.
-END_USAGE
 }
 
 ## ----------------------------------------------------------------------------
@@ -343,7 +321,7 @@ C<LabelStrict> turned on.
 
 These check both C<StatusOpenList> and C<StatusClosedList> from your C<.cil>
 file. If both are specified, you're likely to get no issues unless you
-explicitely defined a status as being in both lists (for whatever reason you
+explicitly defined a status as being in both lists (for whatever reason you
 have).
 
 =item --assigned-to=EMAIL_ADDRESS, --is-mine
@@ -366,11 +344,8 @@ may be declared multiple times:
 
 The C<.cil> file is fairly simple and an example can be seen here:
 
-    VCS: Git
+    UseGit: 1
     StatusStrict: 1
-    StatusAllowedList: New
-    StatusAllowedList: InProgress
-    StatusAllowedList: Finished
     StatusOpenList: New
     StatusOpenList: InProgress
     StatusClosedList: Finished
@@ -383,12 +358,12 @@ The C<.cil> file is fairly simple and an example can be seen here:
 
 =over
 
-=item VCS
+=item UseGit
 
-Default: empty, Type: Enum(Git)
+Default: 0, Type: Boolean (0/1)
 
-Currently this option only supports Git. This enables you to use the 'track'
-command.
+Determines whether to use Git or not. Some features require Git though Cil is
+perfectly usable without.
 
 =item StatusStrict
 
@@ -397,13 +372,6 @@ Default: 0, Type: Boolean (0/1)
 If this is set to a true value then cil checks that the status you enter into
 an issue (after adding or editing) is also in the allowed list (see
 StatusAllowedList).
-
-=item StatusAllowedList
-
-Default: empty, Type: List
-
-This list is checked against when adding or editing issues but only if you have
-StatusStrict on.
 
 =item StatusOpenList
 
@@ -416,6 +384,11 @@ This list is checked against when filtering with --is-open.
 Default: empty, Type: List
 
 This list is checked against when filtering with --is-closed.
+
+=item StatusAllowedList
+
+This list is automatically generated from the StatusOpenList and the
+StatusClosedList. It does not have to appear in the config file.
 
 =item LabelStrict
 
